@@ -38,6 +38,8 @@ class MessageFactory:
             if element.is_file() and element.suffix == ".proto":
                 self.add_proto_file(element, _import=False)
 
+        self._import_messages()
+
     def add_proto_file(self, file, _import=True):
         # This method overwrites without an error!
         file = pathlib.Path(copy2(file, self.proto_dir))
@@ -67,7 +69,7 @@ class MessageFactory:
 
         [stay, fix] = data.split("# @@protoc_insertion_point(imports)")
 
-        fix = fix.replace("import ", "from . import ")
+        fix = fix.replace("\nimport ", "\nfrom . import ")
 
         data = stay + "# @@protoc_insertion_point(imports)" + fix
 

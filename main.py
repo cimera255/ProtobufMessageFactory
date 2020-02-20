@@ -1,0 +1,97 @@
+import tempfile
+import pathlib
+from subprocess import call
+from shutil import copy2
+
+
+class MessageFactory:
+    def __init__(self, work_dir=None):
+        self.messages = dict()
+        self.work_dir = pathlib.Path(tempfile.gettempdir() if work_dir is None else work_dir).absolute()
+
+        if not self.work_dir.exists():
+            raise NotADirectoryError("The directory does not exist.")
+
+        self.proto_dir = self.work_dir.joinpath("proto")
+        self.python_dir = self.work_dir.joinpath("python")
+
+        try:
+            self.proto_dir.mkdir()
+        except FileExistsError:
+            # TODO(Joschua): Implement some error handling
+            pass
+
+        try:
+            self.python_dir.mkdir()
+        except FileExistsError:
+            # TODO(Joschua): Implement some error handling
+            pass
+
+    def add_proto_dir(self, directory):
+        directory = pathlib.Path(directory).absolute()
+
+        for element in directory.iterdir():
+            if element.is_file() and element.suffix == ".proto":
+                self.add_proto_file(element)
+
+    def add_proto_file(self, file):
+        # This method overwrites without an error!
+        file = pathlib.Path(copy2(file, self.proto_dir))
+
+        python_file = self._compile_proto_file(file)
+
+        self._correct_imports(python_file)
+
+        self._import_messages()
+
+    def _compile_proto_file(self, file):
+        call(["protoc",
+              "--proto_path", str(self.proto_dir),
+              "--python_out", str(self.python_dir),
+              str(file)])
+
+        return self.python_dir.joinpath(file.parts[-1].replace(".proto", "_pb2.py"))
+
+    @staticmethod
+    def _correct_imports(python_file):
+        data = python_file.read_text()
+
+        [stay, fix] = data.split("# @@protoc_insertion_point(imports)")
+
+        fix = fix.replace("import ", "from . import ")
+
+        data = stay + "# @@protoc_insertion_point(imports)" + fix
+
+        python_file.write_text(data)
+
+    def _import_messages(self):
+        import importlib.util
+        import sys
+        from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
+        module_names = list()
+
+        file_iterator = list(self.python_dir.iterdir())
+
+        for element in file_iterator:
+            if element.is_file() and element.suffix == ".py":
+                module_name = "proto." + element.parts[-1].replace(".py", "")
+
+                spec = importlib.util.spec_from_file_location(module_name, element)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+
+                try:
+                    spec.loader.exec_module(module)
+                except ModuleNotFoundError as e:
+                    file_iterator.append(element)
+                    continue
+
+                for [name, value] in module.__dict__.items():
+                    if type(value) is GeneratedProtocolMessageType:
+                        print(f"Found Message: {name}")
+                        self.messages[name] = value
+
+                module_names.append(module_name)
+
+        for module_name in module_names:
+            sys.modules.pop(module_name)

@@ -93,7 +93,7 @@ class MessageFactory:
 
                 try:
                     spec.loader.exec_module(module)
-                except ModuleNotFoundError as e:
+                except (ModuleNotFoundError, ImportError) as e:
                     file_iterator.append(element)
                     continue
 

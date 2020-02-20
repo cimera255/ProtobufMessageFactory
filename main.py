@@ -5,7 +5,10 @@ from shutil import copy2
 
 
 class MessageFactory:
-    def __init__(self, work_dir=None):
+    MESSAGE_NAME = 0
+    FILE_NAME = 1
+
+    def __init__(self, work_dir=None, name_source=MESSAGE_NAME):
         self.messages = dict()
         self.work_dir = pathlib.Path(tempfile.gettempdir() if work_dir is None else work_dir).absolute()
 

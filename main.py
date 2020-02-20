@@ -10,6 +10,7 @@ class MessageFactory:
 
     def __init__(self, work_dir=None, name_source=MESSAGE_NAME):
         self.messages = dict()
+        self.name_source = name_source
         self.work_dir = pathlib.Path(tempfile.gettempdir() if work_dir is None else work_dir).absolute()
 
         if not self.work_dir.exists():
@@ -35,17 +36,22 @@ class MessageFactory:
 
         for element in directory.iterdir():
             if element.is_file() and element.suffix == ".proto":
-                self.add_proto_file(element)
+                self.add_proto_file(element, _import=False)
 
-    def add_proto_file(self, file):
+    def add_proto_file(self, file, _import=True):
         # This method overwrites without an error!
         file = pathlib.Path(copy2(file, self.proto_dir))
 
         python_file = self._compile_proto_file(file)
+        
+        try:
+            self._correct_imports(python_file)
 
-        self._correct_imports(python_file)
-
-        self._import_messages()
+            if _import:
+                self._import_messages()
+        except:
+            # File was not found. Maybe compilation failed. 
+            pass
 
     def _compile_proto_file(self, file):
         call(["protoc",
@@ -90,11 +96,26 @@ class MessageFactory:
                     continue
 
                 for [name, value] in module.__dict__.items():
+                    if self.name_source == self.FILE_NAME:
+                        name = module.DESCRIPTOR.name.replace(".proto", "") 
                     if type(value) is GeneratedProtocolMessageType:
-                        print(f"Found Message: {name}")
                         self.messages[name] = value
 
                 module_names.append(module_name)
 
         for module_name in module_names:
             sys.modules.pop(module_name)
+
+    def get_message_class(self, message_name):
+        return self.message.get(message_name)
+
+    def get_message_prototype(self, message_name):
+        message_class = self.get_message_class(message_name)
+
+        try:
+            prototype = message_class() 
+        except:
+            return None
+
+        return prototype 
+

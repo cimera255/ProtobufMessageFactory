@@ -107,7 +107,7 @@ class MessageFactory:
             sys.modules.pop(module_name)
 
     def get_message_class(self, message_name):
-        return self.message.get(message_name)
+        return self.messages.get(message_name)
 
     def get_message_prototype(self, message_name):
         message_class = self.get_message_class(message_name)

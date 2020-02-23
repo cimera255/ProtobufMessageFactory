@@ -14,6 +14,9 @@ except FileNotFoundError:
 
 
 class MessageFactory:
+    """
+    This class tries to ease up the work with protobuf messages in python.
+    """
     MESSAGE_NAME = 0
     FILE_NAME = 1
 
@@ -21,9 +24,14 @@ class MessageFactory:
         """
         Initialize a new instance of MessageFactory.
         :param work_dir: The folder were all proto files get copied and compiled to
-        when added to MessageFacetory.
+        when added to MessageFactory. If work_dir/python exists messages from contained python files are
+        imported in the initialization process.
+        --> If you are reusing the same folder each time the proto files only need to be added
+        after the first initialization.
         :param name_source: Determines if the messages are available under their file name or message name
         after being added to the MessageFactory.
+        FILE_NAME --> Messages will be available under the file name of the proto file (without suffix).
+        MESSAGES_NAME --> Messages will be available under the name of the message defined in the proto file.
         """
         self.messages = dict()
         self.name_source = name_source

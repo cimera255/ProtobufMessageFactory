@@ -22,16 +22,25 @@ class MessageFactory:
         try:
             self.proto_dir.mkdir()
         except FileExistsError:
-            # TODO(Joschua): Implement some error handling
+            # It may be good to recompile the proto files in the proto_dir.
+            # Also all files contained in this folder will already be compiled if they were added
+            # by a previous run of this. --> NO recompile at this moment.
+            # python_dir may not exist at this moment
             pass
 
         try:
             self.python_dir.mkdir()
         except FileExistsError:
-            # TODO(Joschua): Implement some error handling
-            pass
+            # Try to import messages from the folder as it already existed
+            self._import_messages()
 
     def add_proto_files(self, files):
+        """
+        Base function for adding new proto files to the MessageFactory
+        :param files: list of path to proto files. These will be copied to proto_dir, compiled to python_dir
+        where their import statements will be corrected and then be searched for GeneratedProtoBufMessages.
+        :return: None
+        """
         new_files = list()
 
         for file in files:
@@ -44,13 +53,19 @@ class MessageFactory:
 
             try:
                 self._correct_imports(python_file)
-            except:
+            except FileNotFoundError:
                 # File was not found. Maybe compilation failed.
                 pass
 
             self._import_messages()
 
     def add_proto_dir(self, directory):
+        """
+        Add all proto files contained in a certain directory to the MessageFactory.
+        This does not include subdirs.
+        :param directory: Path to a directory containing proto files to add.
+        :return: None
+        """
         directory = pathlib.Path(directory).absolute()
         files = list()
 
@@ -61,9 +76,21 @@ class MessageFactory:
         self.add_proto_files(files)
 
     def add_proto_file(self, file):
+        """
+        Same as add_proto_files but for a single file.
+        :param file: path to a single proto file.
+        :return: None
+        """
         self.add_proto_files([file])
 
     def _compile_proto_file(self, file):
+        """
+        Compiles a single proto file with protoc (protoc has to be present on the system).
+        Directory to import other proto messages is set to proto_dir.
+        Directory for python output is set to python_dir.
+        :param file: pathlib.Path to a proto file to be compiled.
+        :return: Path to the created python file (ATTENTION: The path is although returned if the compilation failed!)
+        """
         # Compile the file
         call(["protoc",
               "--proto_path", str(self.proto_dir),
@@ -74,12 +101,17 @@ class MessageFactory:
 
     @staticmethod
     def _correct_imports(python_file):
+        """
+        This function corrects the import statements in generated python files.
+        This means changing the imports of other user messages from absolute imports
+        from the root of the project to relative imports from the same package.
+        :param python_file: pathlib.Path to a python file which imports should be corrected.
+        :return: None
+        """
         # Read in the python module as text
         data = python_file.read_text()
 
         # Separate the part with imports from google.protobuf from the custom imports
-        # TODO(Joschua): If there is a python file which differs from a standard
-        #  compiled proto file this might throw an exception.
         [stay, fix] = data.split("# @@protoc_insertion_point(imports)")
 
         # Correct the import statements into relative imports

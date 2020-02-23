@@ -18,6 +18,13 @@ class MessageFactory:
     FILE_NAME = 1
 
     def __init__(self, work_dir=None, name_source=MESSAGE_NAME):
+        """
+        Initialize a new instance of MessageFactory.
+        :param work_dir: The folder were all proto files get copied and compiled to
+        when added to MessageFacetory.
+        :param name_source: Determines if the messages are available under their file name or message name
+        after being added to the MessageFactory.
+        """
         self.messages = dict()
         self.name_source = name_source
         self.work_dir = pathlib.Path(tempfile.gettempdir() if work_dir is None else work_dir).absolute()

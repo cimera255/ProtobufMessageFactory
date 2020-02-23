@@ -2,6 +2,7 @@ import tempfile
 import pathlib
 from subprocess import call, STDOUT, DEVNULL
 from shutil import copy2
+import Util
 
 # Check if protoc is callable on this system
 try:
@@ -31,7 +32,9 @@ class MessageFactory:
         :param name_source: Determines if the messages are available under their file name or message name
         after being added to the MessageFactory.
         FILE_NAME --> Messages will be available under the file name of the proto file (without suffix).
+                      This causes issues if you use it with proto files which contain multiple messages.
         MESSAGES_NAME --> Messages will be available under the name of the message defined in the proto file.
+                          This causes issues if you use the same message name in multiple proto files.
         """
         self.messages = dict()
         self.name_source = name_source
@@ -86,7 +89,7 @@ class MessageFactory:
     def add_proto_dir(self, directory):
         """
         Add all proto files contained in a certain directory to the MessageFactory.
-        This does not include subdirs.
+        This does not include subdirectories.
         :param directory: Path to a directory containing proto files to add.
         :return: None
         """
@@ -155,8 +158,17 @@ class MessageFactory:
         import importlib.util
         import sys
         from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
+        from random import getrandbits
+        from modulefinder import Module
+
+        uid = getrandbits(128).to_bytes(16, "big").hex()
+
+        m = Module(uid)
+        sys.modules[uid] = m
+
         # List to store the names of the imported modules so they can be deleted later
         module_names = list()
+        module_names.append(uid)
 
         # List of elements in python_dir. It needs to be a list to be able to reschedule the import
         # of a file in case its import fails because a dependency is not imported at the moment.
@@ -167,9 +179,7 @@ class MessageFactory:
             # Check if the element is a file and a python module.
             if element.is_file() and element.suffix == ".py":
                 # Create a module_name under which the module is imported
-                # TODO(Joschua): Make sure the module name is really unique.
-                #  This could be done by setting the prefix to a random string.
-                module_name = "proto." + element.parts[-1].replace(".py", "")
+                module_name = uid + "." + element.parts[-1].replace(".py", "")
 
                 # Actual import
                 spec = importlib.util.spec_from_file_location(module_name, element)
@@ -228,5 +238,14 @@ class MessageFactory:
             # Catch error caused if no matching message_class was found
             return None
 
-        return prototype 
+        return prototype
 
+    def get_message_dict(self, message_name):
+        msg = self.get_message_prototype(message_name)
+
+        return Util.message_to_dict(msg)
+
+    def get_message_json(self, message_name):
+        msg = self.get_message_prototype(message_name)
+
+        return Util.message_to_json(msg)

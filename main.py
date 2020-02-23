@@ -1,7 +1,16 @@
 import tempfile
 import pathlib
-from subprocess import call
+from subprocess import call, STDOUT, DEVNULL
 from shutil import copy2
+
+# Check if protoc is callable on this system
+try:
+    call(["protoc", "--version"], stdout=DEVNULL, stderr=STDOUT)
+except FileNotFoundError:
+    raise FileNotFoundError("\n\tFailed to execute a protoc command.\n"
+                            "\tIs protoc located in the PATH of your system?\n"
+                            "\tYou can download protoc under:\n"
+                            "\thttps://github.com/protocolbuffers/protobuf/releases")
 
 
 class MessageFactory:

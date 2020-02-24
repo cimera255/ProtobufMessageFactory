@@ -3,6 +3,7 @@ import pathlib
 from subprocess import call, STDOUT, DEVNULL
 from shutil import copy2
 from MessageFactory import Util
+import sys
 
 _PROTOBUF_SUFFIX = ".proto"
 
@@ -152,14 +153,8 @@ class MessageFactory:
         # Write the corrected code back into the module file
         python_file.write_text(data)
 
-    def _import_messages(self):
-        """
-        Imports all messages from the modules located in python_dir.
-        :return: None
-        """
+    def _import_modules(self):
         import importlib.util
-        import sys
-        from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
         from random import getrandbits
         from modulefinder import Module
 
@@ -192,6 +187,8 @@ class MessageFactory:
                 # executes the modules internal import statements (imports its dependencies).
                 try:
                     spec.loader.exec_module(module)
+                    # Store the module name in the list
+                    module_names.append(module_name)
                 except (ModuleNotFoundError, ImportError):
                     # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
                     # These files get rescheduled at the end of the file list.
@@ -200,18 +197,31 @@ class MessageFactory:
                     file_iterator.append(element)
                     continue
 
-                # Loop over the attributes of the module
-                for name, value in module.__dict__.items():
-                    # Correct the name under which the message is stored in case name_source is set to FILE_NAME
-                    if self.name_source == self.FILE_NAME:
-                        name = module.DESCRIPTOR.name.replace(_PROTOBUF_SUFFIX, "")
+        return module_names
 
-                    # Check if the attribute is a message and store it if it is.
-                    if type(value) is GeneratedProtocolMessageType:
-                        self.messages[name] = value
+    def _search_messages_in_modules(self, module_names):
+        from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
 
-                # Store the module name in the list
-                module_names.append(module_name)
+        for module_name in module_names:
+            module = sys.modules[module_name]
+            # Loop over the attributes of the module
+            for name, value in module.__dict__.items():
+                # Correct the name under which the message is stored in case name_source is set to FILE_NAME
+                if self.name_source == self.FILE_NAME:
+                    name = module.DESCRIPTOR.name.replace(_PROTOBUF_SUFFIX, "")
+
+                # Check if the attribute is a message and store it if it is.
+                if type(value) is GeneratedProtocolMessageType:
+                    self.messages[name] = value
+
+    def _import_messages(self):
+        """
+        Imports all messages from the modules located in python_dir.
+        :return: None
+        """
+        module_names = self._import_modules()
+
+        self._search_messages_in_modules(module_names)
 
         # Delete all imported modules from sys.modules
         for module_name in module_names:

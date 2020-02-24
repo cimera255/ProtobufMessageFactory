@@ -2,7 +2,9 @@ import tempfile
 import pathlib
 from subprocess import call, STDOUT, DEVNULL
 from shutil import copy2
-import Util
+from MessageFactory import Util
+
+_PROTOBUF_SUFFIX = ".proto"
 
 # Check if protoc is callable on this system
 try:
@@ -84,7 +86,7 @@ class MessageFactory:
                 # File was not found. Maybe compilation failed.
                 pass
 
-            self._import_messages()
+        self._import_messages()
 
     def add_proto_dir(self, directory):
         """
@@ -97,7 +99,7 @@ class MessageFactory:
         files = list()
 
         for element in directory.iterdir():
-            if element.is_file() and element.suffix == ".proto":
+            if element.is_file() and element.suffix == _PROTOBUF_SUFFIX:
                 files.append(element)
 
         self.add_proto_files(files)
@@ -124,7 +126,7 @@ class MessageFactory:
               "--python_out", str(self.python_dir),
               str(file)])
 
-        return self.python_dir.joinpath(file.parts[-1].replace(".proto", "_pb2.py"))
+        return self.python_dir.joinpath(file.parts[-1].replace(_PROTOBUF_SUFFIX, "_pb2.py"))
 
     @staticmethod
     def _correct_imports(python_file):
@@ -190,7 +192,7 @@ class MessageFactory:
                 # executes the modules internal import statements (imports its dependencies).
                 try:
                     spec.loader.exec_module(module)
-                except (ModuleNotFoundError, ImportError) as e:
+                except (ModuleNotFoundError, ImportError):
                     # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
                     # These files get rescheduled at the end of the file list.
                     # TODO(Joschua): At the moment there is no handling of infinite loops which can be
@@ -199,10 +201,10 @@ class MessageFactory:
                     continue
 
                 # Loop over the attributes of the module
-                for [name, value] in module.__dict__.items():
+                for name, value in module.__dict__.items():
                     # Correct the name under which the message is stored in case name_source is set to FILE_NAME
                     if self.name_source == self.FILE_NAME:
-                        name = module.DESCRIPTOR.name.replace(".proto", "")
+                        name = module.DESCRIPTOR.name.replace(_PROTOBUF_SUFFIX, "")
 
                     # Check if the attribute is a message and store it if it is.
                     if type(value) is GeneratedProtocolMessageType:

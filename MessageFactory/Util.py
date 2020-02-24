@@ -1,4 +1,3 @@
-from google.protobuf.json_format import MessageToDict
 import json
 
 
@@ -17,22 +16,23 @@ def message_to_dict(message):
         value = getattr(message, descriptor.name)
 
         if descriptor.label == descriptor.LABEL_REPEATED:
-            messageList = []
+            message_list = []
 
-            for subMessage in value:
-                if descriptor.type == descriptor.TYPE_MESSAGE:
-                    messageList.append(MessageToDict(subMessage))
-                else:
-                    messageList.append(subMessage)
+            for sub_message in value:
+                message_list.append(_handle_field(descriptor, sub_message))
 
-            msg_dict[key] = messageList
+            msg_dict[key] = message_list
         else:
-            if descriptor.type == descriptor.TYPE_MESSAGE:
-                msg_dict[key] = MessageToDict(value)
-            else:
-                msg_dict[key] = value
+            msg_dict[key] = _handle_field(descriptor, value)
 
     return msg_dict
+
+
+def _handle_field(descriptor, value):
+    if descriptor.type == descriptor.TYPE_MESSAGE:
+        return message_to_dict(value)
+    else:
+        return value
 
 
 def message_to_json(message, indent=4):

@@ -5,6 +5,7 @@ from shutil import copy2
 from MessageFactory import Util
 import sys
 from contextlib import contextmanager
+import logging
 
 _PROTOBUF_SUFFIX = ".proto"
 
@@ -17,14 +18,18 @@ except FileNotFoundError:
                             "\tYou can download protoc under:\n"
                             "\thttps://github.com/protocolbuffers/protobuf/releases")
 
-
 @contextmanager
-def _temp_import(directory):
+def _temp_import(directory, log_leve=logging.WARNING):
     import importlib.util
     from random import getrandbits
     from modulefinder import Module
 
+    logger = logging.getLogger("Temp-Import")
+
+    logger.debug(f'Starting temporary import from "{directory}".')
+
     uid = getrandbits(128).to_bytes(16, "big").hex()
+    logger.debug(f'Modules are imported under "{uid}"')
 
     m = Module(uid)
     sys.modules[uid] = m
@@ -39,10 +44,23 @@ def _temp_import(directory):
     # of a file in case its import fails because a dependency is not imported at the moment.
     file_iterator = list(directory.iterdir())
 
+    # TODO(Joschua): This needs to be discussed.
+    #  Theoretically the maximal amount of import attempts needed should be equal
+    #  to the total number of imports.
+    #  This is true under the assumption that the first import is dependent on
+    #  the second which depends on the third and so on.
+    #  After this number of attempts it can be assumed that there is an error
+    #  preventing the import which can not be solved by importing other modules.
+    #  Practically it may be sufficient to use a smaller number.
+    #  Decision should be made based on performance impact of the higher number
+    #  in contrast to a smaller.
+    max_retries = len(file_iterator)
+
     # Loop over the elements
     for element in file_iterator:
         # Check if the element is a file and a python module.
         if element.is_file() and element.suffix == ".py":
+            logger.debug(f'Importing "{element}"')
             # Create a module_name under which the module is imported
             module_name = uid + "." + element.parts[-1].replace(".py", "")
 
@@ -51,25 +69,36 @@ def _temp_import(directory):
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
 
+            # Store the module name in the list
+            module_names.append(module_name)
+
             # Execute the module. This is needed for a complete import as it e.g.
             # executes the modules internal import statements (imports its dependencies).
             try:
                 spec.loader.exec_module(module)
-                # Store the module name in the list
-                module_names.append(module_name)
                 modules.append(module)
             except (ModuleNotFoundError, ImportError):
                 # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
                 # These files get rescheduled at the end of the file list.
-                # TODO(Joschua): At the moment there is no handling of infinite loops which can be
-                #  caused by real missing modules or recursive imports.
-                file_iterator.append(element)
+                retries = file_iterator.count(element)
+                logger.warning(f'{retries}/{max_retries} import attempt failed: "{element}"')
+
+                if retries >= max_retries:
+                    logger.error(f'Maximum number of import attempts reached for "{element}".'
+                                 f'\nContent will not be imported!')
+                else:
+                    file_iterator.append(element)
                 continue
 
+            logger.debug(f'Successfully imported "{element}"')
+
     try:
+        # Entry point for custom function. Serving a list of the imported modules.
+        logger.debug('Entering user part of the contextmanager.')
         yield modules
     finally:
-        # Code to release resource, e.g.:
+        # Code to release resources:
+        logger.debug("Releasing resources.")
         for module_name in module_names:
             sys.modules.pop(module_name)
 
@@ -209,7 +238,6 @@ class MessageFactory:
 
         # Write the corrected code back into the module file
         python_file.write_text(data)
-
 
     def _search_messages_in_modules(self, modules):
         from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType

@@ -297,11 +297,33 @@ class MessageFactory:
         return prototype
 
     def get_message_dict(self, message_name):
+        """
+        Gives you a dict representation of the message with the name message_name.
+        All fields of the dict are prefilled with default values.
+        :param message_name: Name of the message you want a dict representation for.
+        :return: dict
+        """
+        # Get a message instance. This may return None if message_name is unknown
         msg = self.get_message_prototype(message_name)
 
-        return Util.message_to_dict(msg)
+        try:
+            return Util.message_to_dict(msg)
+        except AttributeError:
+            # Error handling if message_name is unknown
+            return None
 
     def get_message_json(self, message_name):
+        """
+        Gives you a json representation of the message with the name message_name.
+        All fields of the json are prefilled with default values.
+        :param message_name: Name of the message you want a json representation for.
+        :return: str (json)
+        """
+        # Get a message instance. This may return None if message_name is unknown
         msg = self.get_message_prototype(message_name)
 
-        return Util.message_to_json(msg)
+        try:
+            return Util.message_to_json(msg)
+        except AttributeError:
+            # Error handling if message_name is unknown
+            return None

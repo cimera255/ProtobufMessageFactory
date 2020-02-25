@@ -18,6 +18,7 @@ except FileNotFoundError:
                             "\tYou can download protoc under:\n"
                             "\thttps://github.com/protocolbuffers/protobuf/releases")
 
+
 @contextmanager
 def _temp_import(directory, log_level=logging.WARNING):
     import importlib.util
@@ -108,8 +109,12 @@ class MessageFactory:
     """
     This class tries to ease up the work with protobuf messages in python.
     """
+    # Messages can be accessed under the message name defined in their .proto file
     MESSAGE_NAME = 0
+    # Messages can be accessed under the name of the .proto file they are contained in (without suffix)
     FILE_NAME = 1
+    # Message can be accessed under <file_name>.<message_name> (File name without suffix)
+    BOTH = 2
 
     def __init__(self, work_dir=None, name_source=MESSAGE_NAME):
         """
@@ -119,12 +124,14 @@ class MessageFactory:
         imported in the initialization process.
         --> If you are reusing the same folder each time the proto files only need to be added
         after the first initialization.
-        :param name_source: Determines if the messages are available under their file name or message name
-        after being added to the MessageFactory.
+        :param name_source: Determines if the messages are available under their file name, message name
+        or a combination of both after being added to the MessageFactory.
         FILE_NAME --> Messages will be available under the file name of the proto file (without suffix).
-                      This causes issues if you use it with proto files which contain multiple messages.
+                      This causes issues (collision) if you use it with proto files which contain multiple messages.
         MESSAGES_NAME --> Messages will be available under the name of the message defined in the proto file.
-                          This causes issues if you use the same message name in multiple proto files.
+                          This causes issues (collision) if you use the same message name in multiple proto files.
+        BOTH --> Messages will be available under <file_name>.<message_name> (file name without suffix).
+                 This does not cause collision issues but makes the names much longer and more complex.
         """
         self.messages = dict()
         self.name_source = name_source
@@ -249,6 +256,8 @@ class MessageFactory:
                 # Correct the name under which the message is stored in case name_source is set to FILE_NAME
                 if self.name_source == self.FILE_NAME:
                     name = module.DESCRIPTOR.name.replace(_PROTOBUF_SUFFIX, "")
+                elif self.name_source == self.BOTH:
+                    name = f'{module.DESCRIPTOR.name.replace(_PROTOBUF_SUFFIX, "")}.{name}'
 
                 # Check if the attribute is a message and store it if it is.
                 if type(value) is GeneratedProtocolMessageType:

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ProtobufMessageFactory", # Replace with your own username
-    version="0.0.1",
+    version="0.0.3",
     author="cimera255",
     author_email="author@example.com",
     description="This package tries to ease up the work with protobuf messages in python.",

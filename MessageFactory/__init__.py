@@ -4,6 +4,7 @@ from subprocess import call, STDOUT, DEVNULL
 from shutil import copy2
 from MessageFactory import Util
 import sys
+from contextlib import contextmanager
 
 _PROTOBUF_SUFFIX = ".proto"
 
@@ -15,6 +16,62 @@ except FileNotFoundError:
                             "\tIs protoc located in the PATH of your system?\n"
                             "\tYou can download protoc under:\n"
                             "\thttps://github.com/protocolbuffers/protobuf/releases")
+
+
+@contextmanager
+def _temp_import(directory):
+    import importlib.util
+    from random import getrandbits
+    from modulefinder import Module
+
+    uid = getrandbits(128).to_bytes(16, "big").hex()
+
+    m = Module(uid)
+    sys.modules[uid] = m
+
+    modules = list()
+
+    # List to store the names of the imported modules so they can be deleted later
+    module_names = list()
+    module_names.append(uid)
+
+    # List of elements in python_dir. It needs to be a list to be able to reschedule the import
+    # of a file in case its import fails because a dependency is not imported at the moment.
+    file_iterator = list(directory.iterdir())
+
+    # Loop over the elements
+    for element in file_iterator:
+        # Check if the element is a file and a python module.
+        if element.is_file() and element.suffix == ".py":
+            # Create a module_name under which the module is imported
+            module_name = uid + "." + element.parts[-1].replace(".py", "")
+
+            # Actual import
+            spec = importlib.util.spec_from_file_location(module_name, element)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+
+            # Execute the module. This is needed for a complete import as it e.g.
+            # executes the modules internal import statements (imports its dependencies).
+            try:
+                spec.loader.exec_module(module)
+                # Store the module name in the list
+                module_names.append(module_name)
+                modules.append(module)
+            except (ModuleNotFoundError, ImportError):
+                # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
+                # These files get rescheduled at the end of the file list.
+                # TODO(Joschua): At the moment there is no handling of infinite loops which can be
+                #  caused by real missing modules or recursive imports.
+                file_iterator.append(element)
+                continue
+
+    try:
+        yield modules
+    finally:
+        # Code to release resource, e.g.:
+        for module_name in module_names:
+            sys.modules.pop(module_name)
 
 
 class MessageFactory:
@@ -153,57 +210,11 @@ class MessageFactory:
         # Write the corrected code back into the module file
         python_file.write_text(data)
 
-    def _import_modules(self):
-        import importlib.util
-        from random import getrandbits
-        from modulefinder import Module
 
-        uid = getrandbits(128).to_bytes(16, "big").hex()
-
-        m = Module(uid)
-        sys.modules[uid] = m
-
-        # List to store the names of the imported modules so they can be deleted later
-        module_names = list()
-        module_names.append(uid)
-
-        # List of elements in python_dir. It needs to be a list to be able to reschedule the import
-        # of a file in case its import fails because a dependency is not imported at the moment.
-        file_iterator = list(self.python_dir.iterdir())
-
-        # Loop over the elements
-        for element in file_iterator:
-            # Check if the element is a file and a python module.
-            if element.is_file() and element.suffix == ".py":
-                # Create a module_name under which the module is imported
-                module_name = uid + "." + element.parts[-1].replace(".py", "")
-
-                # Actual import
-                spec = importlib.util.spec_from_file_location(module_name, element)
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-
-                # Execute the module. This is needed for a complete import as it e.g.
-                # executes the modules internal import statements (imports its dependencies).
-                try:
-                    spec.loader.exec_module(module)
-                    # Store the module name in the list
-                    module_names.append(module_name)
-                except (ModuleNotFoundError, ImportError):
-                    # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
-                    # These files get rescheduled at the end of the file list.
-                    # TODO(Joschua): At the moment there is no handling of infinite loops which can be
-                    #  caused by real missing modules or recursive imports.
-                    file_iterator.append(element)
-                    continue
-
-        return module_names
-
-    def _search_messages_in_modules(self, module_names):
+    def _search_messages_in_modules(self, modules):
         from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
 
-        for module_name in module_names:
-            module = sys.modules[module_name]
+        for module in modules:
             # Loop over the attributes of the module
             for name, value in module.__dict__.items():
                 # Correct the name under which the message is stored in case name_source is set to FILE_NAME
@@ -219,13 +230,8 @@ class MessageFactory:
         Imports all messages from the modules located in python_dir.
         :return: None
         """
-        module_names = self._import_modules()
-
-        self._search_messages_in_modules(module_names)
-
-        # Delete all imported modules from sys.modules
-        for module_name in module_names:
-            sys.modules.pop(module_name)
+        with _temp_import(self.python_dir) as modules:
+            self._search_messages_in_modules(modules)
 
     def get_message_class(self, message_name):
         """

@@ -107,7 +107,7 @@ def _temp_import(directory, log_level=logging.WARNING):
 
 class MessageFactory:
     """
-    This class tries to ease up the work with protobuf messages in python.
+    This class tries to ease up the dynamic work with protobuf messages in python.
     """
     # Messages can be accessed under the message name defined in their .proto file
     MESSAGE_NAME = 0
@@ -248,6 +248,11 @@ class MessageFactory:
         python_file.write_text(data)
 
     def _search_messages_in_modules(self, modules):
+        """
+        Searches modules for GeneratedProtocolMessageType and added them to the internal dict.
+        :param modules: List of modules to search in.
+        :return: None
+        """
         from google.protobuf.pyext.cpp_message import GeneratedProtocolMessageType
 
         for module in modules:

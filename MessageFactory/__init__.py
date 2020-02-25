@@ -19,12 +19,13 @@ except FileNotFoundError:
                             "\thttps://github.com/protocolbuffers/protobuf/releases")
 
 @contextmanager
-def _temp_import(directory, log_leve=logging.WARNING):
+def _temp_import(directory, log_level=logging.WARNING):
     import importlib.util
     from random import getrandbits
     from modulefinder import Module
 
     logger = logging.getLogger("Temp-Import")
+    logger.setLevel(log_level)
 
     logger.debug(f'Starting temporary import from "{directory}".')
 

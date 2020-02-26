@@ -8,7 +8,7 @@ with open("requirements.txt", "r") as fh:
 
 setuptools.setup(
     name="ProtobufMessageFactory", # Replace with your own username
-    version="0.1.1",
+    version="0.1.2",
     author="cimera255",
     author_email="author@example.com",
     description="This package tries to ease up the work with protobuf messages in python.",

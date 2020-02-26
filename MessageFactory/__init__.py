@@ -71,14 +71,13 @@ def _temp_import(directory, log_level=logging.WARNING):
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
 
-            # Store the module name in the list
-            module_names.append(module_name)
-
             # Execute the module. This is needed for a complete import as it e.g.
             # executes the modules internal import statements (imports its dependencies).
             try:
                 spec.loader.exec_module(module)
                 modules.append(module)
+                # Store the module name in the list
+                module_names.append(module_name)
             except (ModuleNotFoundError, ImportError):
                 # Catch errors caused by missing dependencies (which are maybe not imported at the moment)
                 # These files get rescheduled at the end of the file list.
@@ -88,6 +87,8 @@ def _temp_import(directory, log_level=logging.WARNING):
                 if retries >= max_retries:
                     logger.error(f'Maximum number of import attempts reached for "{element}".'
                                  f'\nContent will not be imported!')
+                    # Store the module name in the list
+                    module_names.append(module_name)
                 else:
                     file_iterator.append(element)
                 continue

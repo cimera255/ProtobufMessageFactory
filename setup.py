@@ -7,8 +7,8 @@ with open("requirements.txt", "r") as fh:
     requirements = fh.read().replace(" ", "").split("\n")
 
 setuptools.setup(
-    name="ProtobufMessageFactory", # Replace with your own username
-    version="0.1.2",
+    name="ProtobufMessageFactory",
+    version="0.1.3",
     author="cimera255",
     author_email="author@example.com",
     description="This package tries to ease up the work with protobuf messages in python.",
